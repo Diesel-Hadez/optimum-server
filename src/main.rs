@@ -1,47 +1,30 @@
+
 use rusqlite::{params, Connection, Result};
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, HttpRequest};
-
-#[derive(Debug)]
-struct User{
-    name: String,
-    phone_num: String,
-    email: String,
-    dob: String,
-    allergies: String,
-    id: u32,
-    id_type: String,
-    password: String,
-}
-
-impl User{
-    fn add_to_db(&self, conn: &Connection){
-        println!("Ha");
-        conn.execute("INSERT INTO User (name, phone_num, email, dob, allergies, id, id_type, password) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", params![self.name, self.phone_num, self.email, self.dob, self.allergies, self.id, self.id_type, self.password]).unwrap();
-    }
-}
+mod user;
+use user::User;
+use r2d2_sqlite::{self, SqliteConnectionManager};
 
 
-#[get("/echo")]
-async fn echo(req: HttpRequest) -> impl Responder {
-    let msg = req.query_string();
-    println!("Req: {:#?}", req);
-    HttpResponse::Ok().body(format!("{}", &msg))
-}
+mod handlers;
+use handlers::{echo, index, dummy, dump_users, login, signup};
 
-async fn index() -> impl Responder {
-    "OptiMUM"
-}
+mod db;
+use db::{Pool};
 
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let conn = Connection::open_in_memory().unwrap();
+    let manager = SqliteConnectionManager::file("database.db");
+    let pool = Pool::new(manager).unwrap();
+    let conn = pool.get().unwrap();
     // Note, I'm pretty sure there's something other than Text which is a better fit.
     // Yay for storing passwords in the database as plaintext
     println!("Creating table!");
     conn.execute(
     "CREATE TABLE User (
-                    id              INTEGER PRIMARY KEY,
+                    user_id         INTEGER PRIMARY KEY,
+                    id              TEXT NOT NULL,
                     name            TEXT NOT NULL,
                     phone_num       TEXT NOT NULL,
                     email           TEXT NOT NULL,
@@ -55,7 +38,8 @@ async fn main() -> std::io::Result<()> {
         println!("Done Creating table!");
 
     let sample_user = User {
-        id: 1,
+        user_id: 1,
+        id: "234567".to_string(),
         name: "John Travolta".to_string(),
         phone_num: "+60 016 346 2745".to_string(),
         email : "user@example.local".to_string(),
@@ -67,10 +51,15 @@ async fn main() -> std::io::Result<()> {
     };
     sample_user.add_to_db(&conn);
     let port: u16 = 8000;
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
+            .data(pool.clone())
             .service(echo)
+            .service(dummy)
+            .service(dump_users)
+            .service(login)
+            .service(signup)
             .route("/", web::get().to(index))
 
-    }).bind(format!("127.0.0.1:{}",port)).unwrap().run().await
+    }).bind(format!("0.0.0.0:{}",port)).unwrap().run().await
 }

@@ -8,4 +8,9 @@ edition = "2018"
 
 [dependencies]
 actix-web = "3"
-rusqlite = "0.24.2"
+rusqlite = "0.21"
+geoutils = "0.4.0"
+r2d2 = "0.8.2"
+r2d2_sqlite = "0.14"
+
+serde = { version = "1", features = ["derive"] }
